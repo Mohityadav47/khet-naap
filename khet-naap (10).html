@@ -1,0 +1,1486 @@
+<!DOCTYPE html>
+<html lang="hi">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>KhetNaap – खेत नापें आसानी से</title>
+
+  <!-- Leaflet Map -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+  <!-- Turf.js for area calculation -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Turf.js/6.5.0/turf.min.js"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600;800&family=Noto+Sans+Devanagari:wght@400;600&display=swap');
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --green-deep:  #1a4a2e;
+      --green-mid:   #2d7a4f;
+      --green-light: #4caf78;
+      --soil:        #8b5e3c;
+      --soil-light:  #c49a6c;
+      --cream:       #fdf8f0;
+      --wheat:       #f5e6c8;
+      --text:        #1a2e1f;
+      --muted:       #6b7c72;
+      --white:       #ffffff;
+      --red:         #e05252;
+      --shadow:      0 4px 24px rgba(26,74,46,0.13);
+    }
+
+    body {
+      font-family: 'Noto Sans Devanagari', 'Baloo 2', sans-serif;
+      background: var(--cream);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* HEADER */
+    header {
+      background: linear-gradient(135deg, var(--green-deep) 0%, var(--green-mid) 100%);
+      color: var(--white);
+      padding: 0 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      height: 64px;
+      box-shadow: 0 2px 12px rgba(0,0,0,0.18);
+      position: sticky;
+      top: 0;
+      z-index: 1000;
+    }
+
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .logo-icon {
+      width: 38px; height: 38px;
+      background: var(--green-light);
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+
+    .logo-text {
+      font-family: 'Baloo 2', sans-serif;
+      font-weight: 800;
+      font-size: 22px;
+      letter-spacing: -0.5px;
+    }
+
+    .logo-sub {
+      font-size: 11px;
+      opacity: 0.75;
+      font-weight: 400;
+      letter-spacing: 0.5px;
+    }
+
+    .nav-tabs {
+      display: flex;
+      gap: 4px;
+      background: rgba(0,0,0,0.18);
+      padding: 4px;
+      border-radius: 12px;
+    }
+    .nav-tab {
+      padding: 8px 16px;
+      border: none;
+      border-radius: 9px;
+      background: transparent;
+      color: rgba(255,255,255,0.75);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.18s;
+      white-space: nowrap;
+    }
+    .nav-tab:hover { color: var(--white); background: rgba(255,255,255,0.1); }
+    .nav-tab.active { background: var(--white); color: var(--green-deep); }
+
+    .search-box {
+      display: flex;
+      gap: 6px;
+      align-items: center;
+    }
+    .search-box input {
+      padding: 8px 14px;
+      border-radius: 20px;
+      border: none;
+      background: rgba(255,255,255,0.18);
+      color: var(--white);
+      font-family: inherit;
+      font-size: 13px;
+      width: 220px;
+      outline: none;
+    }
+    .search-box input::placeholder { color: rgba(255,255,255,0.6); }
+    .search-box input:focus { background: rgba(255,255,255,0.28); }
+    .search-box button {
+      padding: 8px 16px;
+      border-radius: 20px;
+      border: none;
+      background: var(--green-light);
+      color: var(--white);
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    .search-box button:hover { background: #fff; color: var(--green-deep); }
+
+    .header-badge {
+      background: rgba(255,255,255,0.15);
+      border: 1px solid rgba(255,255,255,0.25);
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+
+    /* LAYOUT */
+    .app-layout {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      height: calc(100vh - 64px);
+    }
+
+    /* SIDEBAR */
+    .sidebar {
+      background: var(--white);
+      border-right: 1px solid rgba(45,122,79,0.12);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 2px 0 16px rgba(0,0,0,0.04);
+    }
+
+    .sidebar-section {
+      padding: 20px;
+      border-bottom: 1px solid rgba(45,122,79,0.08);
+    }
+
+    .section-label {
+      font-size: 10px;
+      font-weight: 600;
+      letter-spacing: 1.2px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 12px;
+    }
+
+    /* TOOL BUTTONS */
+    .tool-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .tool-btn {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 5px;
+      padding: 12px 8px;
+      border: 2px solid transparent;
+      border-radius: 12px;
+      background: var(--cream);
+      cursor: pointer;
+      transition: all 0.18s;
+      font-family: inherit;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .tool-btn:hover { background: var(--wheat); border-color: var(--green-light); }
+    .tool-btn.active { background: var(--green-deep); color: var(--white); border-color: var(--green-deep); }
+    .tool-btn .t-icon { font-size: 20px; }
+
+    /* ACTION BUTTONS */
+    .action-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    .btn {
+      flex: 1;
+      padding: 10px 14px;
+      border: none;
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .btn-primary { background: var(--green-mid); color: var(--white); }
+    .btn-primary:hover { background: var(--green-deep); }
+    .btn-danger { background: #ffeaea; color: var(--red); }
+    .btn-danger:hover { background: var(--red); color: var(--white); }
+    .btn-soil { background: var(--soil); color: var(--white); }
+    .btn-soil:hover { background: #6b4628; }
+    .btn-outline {
+      background: transparent;
+      border: 2px solid var(--green-mid);
+      color: var(--green-mid);
+      flex: none;
+      padding: 10px 12px;
+    }
+    .btn-outline:hover { background: var(--green-mid); color: var(--white); }
+
+    /* AREA DISPLAY */
+    .area-card {
+      background: linear-gradient(135deg, var(--green-deep), var(--green-mid));
+      border-radius: 16px;
+      padding: 20px;
+      color: var(--white);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .area-card::before {
+      content: '🌾';
+      position: absolute;
+      right: 12px; top: 8px;
+      font-size: 48px;
+      opacity: 0.15;
+    }
+
+    .area-main {
+      font-family: 'Baloo 2', sans-serif;
+      font-size: 36px;
+      font-weight: 800;
+      line-height: 1;
+      margin: 4px 0;
+    }
+
+    .area-unit {
+      font-size: 14px;
+      opacity: 0.8;
+      font-weight: 600;
+    }
+
+    .area-label {
+      font-size: 11px;
+      opacity: 0.65;
+      letter-spacing: 0.5px;
+      margin-bottom: 6px;
+    }
+
+    /* UNIT TABS */
+    .unit-tabs {
+      display: flex;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .unit-tab {
+      padding: 5px 12px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      transition: all 0.15s;
+      background: rgba(255,255,255,0.15);
+      color: var(--white);
+    }
+
+    .unit-tab.active { background: var(--white); color: var(--green-deep); }
+
+    /* CONVERSIONS */
+    .conv-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .conv-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      background: var(--cream);
+      border-radius: 10px;
+      border-left: 3px solid var(--green-light);
+    }
+
+    .conv-name { font-size: 13px; font-weight: 600; color: var(--muted); }
+    .conv-val { font-size: 14px; font-weight: 700; color: var(--green-deep); font-family: 'Baloo 2', sans-serif; }
+
+    /* SAVED FIELDS */
+    .field-list { display: grid; gap: 8px; }
+
+    .field-card {
+      background: var(--cream);
+      border-radius: 12px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border: 1px solid rgba(45,122,79,0.1);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .field-card:hover { border-color: var(--green-light); background: var(--wheat); }
+
+    .field-info { flex: 1; }
+    .field-name { font-size: 13px; font-weight: 700; }
+    .field-area { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    .field-del {
+      background: none;
+      border: none;
+      cursor: pointer;
+      font-size: 16px;
+      padding: 4px;
+      opacity: 0.4;
+      transition: opacity 0.15s;
+    }
+
+    .field-del:hover { opacity: 1; }
+
+    .empty-state {
+      text-align: center;
+      padding: 24px 16px;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .empty-icon { font-size: 32px; margin-bottom: 8px; }
+
+    /* MAP */
+    #map {
+      height: 100%;
+      width: 100%;
+      background: #e8f5e9;
+    }
+
+    /* STATUS BAR */
+    .map-wrapper {
+      position: relative;
+      height: 100%;
+    }
+
+    .map-status {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      background: rgba(26,74,46,0.92);
+      color: var(--white);
+      padding: 10px 20px;
+      border-radius: 30px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 500;
+      backdrop-filter: blur(8px);
+      pointer-events: none;
+      transition: opacity 0.3s;
+      white-space: nowrap;
+    }
+
+    .map-status.hidden { opacity: 0; }
+
+    /* TOAST */
+    .toast {
+      position: fixed;
+      top: 76px;
+      right: 20px;
+      background: var(--green-deep);
+      color: var(--white);
+      padding: 12px 20px;
+      border-radius: 12px;
+      font-size: 13px;
+      font-weight: 600;
+      z-index: 9999;
+      box-shadow: var(--shadow);
+      transform: translateX(200%);
+      transition: transform 0.3s;
+    }
+
+    .toast.show { transform: translateX(0); }
+
+    /* SAVE MODAL */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.45);
+      z-index: 2000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.2s;
+    }
+
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+
+    .modal {
+      background: var(--white);
+      border-radius: 20px;
+      padding: 28px;
+      width: 320px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+      transform: scale(0.9);
+      transition: transform 0.2s;
+    }
+
+    .modal-overlay.open .modal { transform: scale(1); }
+
+    .modal h3 { font-size: 18px; font-weight: 800; margin-bottom: 16px; color: var(--green-deep); }
+
+    .modal input {
+      width: 100%;
+      padding: 12px 14px;
+      border: 2px solid rgba(45,122,79,0.2);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.15s;
+      margin-bottom: 16px;
+    }
+
+    .modal input:focus { border-color: var(--green-mid); }
+    .modal-btns { display: flex; gap: 10px; }
+
+    /* Instructions */
+    .instructions {
+      background: var(--wheat);
+      border-radius: 10px;
+      padding: 12px 14px;
+      font-size: 12px;
+      color: var(--soil);
+      line-height: 1.7;
+      border-left: 3px solid var(--soil-light);
+    }
+
+    .instructions b { color: var(--green-deep); }
+
+    /* Points counter */
+    .points-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      background: var(--wheat);
+      border-radius: 20px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--soil);
+    }
+
+    /* MANDI BHAV PAGE */
+    .mandi-page {
+      height: calc(100vh - 64px);
+      overflow-y: auto;
+      background: var(--cream);
+    }
+
+    .mandi-container {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 24px;
+    }
+
+    .mandi-filters {
+      background: var(--white);
+      border-radius: 16px;
+      padding: 20px;
+      box-shadow: var(--shadow);
+      margin-bottom: 20px;
+    }
+
+    .mandi-filter-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.4fr auto;
+      gap: 14px;
+      align-items: end;
+    }
+
+    .mandi-field label {
+      display: block;
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+
+    .mandi-field select {
+      width: 100%;
+      padding: 11px 12px;
+      border: 2px solid rgba(45,122,79,0.18);
+      border-radius: 10px;
+      font-family: inherit;
+      font-size: 13px;
+      color: var(--text);
+      background: var(--cream);
+      outline: none;
+      cursor: pointer;
+    }
+
+    .mandi-field select:focus { border-color: var(--green-mid); }
+
+    .mandi-search-btn {
+      flex: none;
+      padding: 11px 22px;
+      white-space: nowrap;
+    }
+
+    .mandi-status {
+      text-align: center;
+      padding: 30px 20px;
+      color: var(--muted);
+      font-size: 14px;
+      background: var(--white);
+      border-radius: 16px;
+    }
+
+    .mandi-status.loading { color: var(--green-mid); font-weight: 600; }
+    .mandi-status.error { color: var(--red); background: #fff0f0; }
+
+    .mandi-results { display: grid; gap: 12px; }
+
+    .mandi-card {
+      background: var(--white);
+      border-radius: 14px;
+      padding: 16px 20px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+      border-left: 4px solid var(--green-light);
+      display: grid;
+      grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr;
+      gap: 12px;
+      align-items: center;
+    }
+
+    .mandi-card-head {
+      background: var(--green-deep);
+      color: var(--white);
+      border-radius: 14px;
+      padding: 12px 20px;
+      display: grid;
+      grid-template-columns: 1.6fr 1fr 1fr 1fr 1fr;
+      gap: 12px;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+    }
+
+    .mc-crop { font-weight: 800; color: var(--green-deep); font-size: 14px; }
+    .mc-mandi { font-size: 12px; color: var(--muted); margin-top: 2px; }
+    .mc-price { font-family: 'Baloo 2', sans-serif; font-weight: 800; font-size: 16px; }
+    .mc-min { color: var(--muted); }
+    .mc-max { color: var(--green-mid); }
+    .mc-modal-price { color: var(--soil); }
+    .mc-label { font-size: 10px; color: var(--muted); font-weight: 600; display: block; margin-bottom: 2px; }
+
+    @media (max-width: 800px) {
+      .mandi-filter-row { grid-template-columns: 1fr 1fr; }
+      .mandi-search-btn { grid-column: span 2; }
+      .mandi-card, .mandi-card-head { grid-template-columns: 1fr 1fr; font-size: 12px; }
+      .mc-mandi-col { display: none; }
+    }
+
+    @media (max-width: 900px) {
+      .nav-tabs { order: 3; width: 100%; justify-content: center; margin-top: 6px; }
+      header { flex-wrap: wrap; height: auto; padding: 10px 12px; }
+      header { padding: 0 12px; gap: 8px; }
+      .logo-text { font-size: 17px; }
+      .search-box input { width: 140px; font-size: 12px; }
+      .app-layout { grid-template-columns: 1fr; grid-template-rows: auto 1fr; height: auto; min-height: calc(100vh - 64px); }
+      .sidebar { height: auto; max-height: 50vh; overflow-y: auto; }
+      .map-wrapper { height: 55vh; min-height: 320px; }
+      #map { height: 100%; }
+      .area-main { font-size: 28px; }
+      .tool-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
+      .tool-btn { padding: 8px 4px; font-size: 11px; }
+      .sidebar-section { padding: 14px; }
+    }
+    @media (max-width: 480px) {
+      .search-box input { width: 110px; font-size: 11px; padding: 7px 10px; }
+      .search-box button { padding: 7px 10px; font-size: 12px; }
+      .logo-sub { display: none; }
+      .tool-grid { grid-template-columns: 1fr 1fr 1fr 1fr; }
+      .modal { width: 95vw; padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon">🌾</div>
+    <div>
+      <div class="logo-text">KhetNaap</div>
+      <div class="logo-sub">खेत नापें आसानी से</div>
+    </div>
+  </div>
+  <div class="nav-tabs">
+    <button class="nav-tab active" id="nav-khet" onclick="switchPage('khet')">📐 खेत नापें</button>
+    <button class="nav-tab" id="nav-mandi" onclick="switchPage('mandi')">💰 मंडी भाव</button>
+  </div>
+  <div class="search-box" id="khet-search-box">
+    <input type="text" id="location-search" placeholder="🔍 अपना गाँव / शहर खोजें..." onkeydown="if(event.key==='Enter') searchLocation()"/>
+    <button onclick="searchLocation()">जाएं</button>
+  </div>
+</header>
+
+<div class="app-layout" id="page-khet">
+
+  <!-- SIDEBAR -->
+  <div class="sidebar">
+
+    <!-- Tools -->
+    <div class="sidebar-section">
+      <div class="section-label">🛠 Tool चुनें</div>
+      <div class="tool-grid">
+        <button class="tool-btn active" id="btn-draw" onclick="setTool('draw')">
+          <span class="t-icon">✏️</span> Draw करें
+        </button>
+        <button class="tool-btn" id="btn-gps" onclick="useGPS()">
+          <span class="t-icon">📍</span> GPS से
+        </button>
+        <button class="tool-btn" id="btn-move" onclick="setTool('move')">
+          <span class="t-icon">🖐️</span> Move करें
+        </button>
+        <button class="tool-btn" id="btn-delete" onclick="setTool('delete')">
+          <span class="t-icon">🗑️</span> Point हटाएं
+        </button>
+      </div>
+    </div>
+
+    <!-- Instructions -->
+    <div class="sidebar-section">
+      <div class="instructions" id="instructions">
+        <b>✏️ Draw Mode:</b><br>
+        Map पर click करके खेत की boundary draw करें।<br>
+        पहले point पर click करके बंद करें।
+      </div>
+    </div>
+
+    <!-- Area -->
+    <div class="sidebar-section">
+      <div class="section-label">📐 कुल क्षेत्रफल</div>
+      <div class="area-card">
+        <div class="area-label">TOTAL AREA</div>
+        <div class="area-main" id="area-main">0</div>
+        <div class="area-unit" id="area-unit">वर्ग मीटर</div>
+        <div class="unit-tabs">
+          <button class="unit-tab active" onclick="switchUnit('sqm')">Sq.m</button>
+          <button class="unit-tab" onclick="switchUnit('bigha')">बीघा</button>
+          <button class="unit-tab" onclick="switchUnit('acre')">Acre</button>
+          <button class="unit-tab" onclick="switchUnit('hectare')">Hectare</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Conversions -->
+    <div class="sidebar-section">
+      <div class="section-label">🔄 Unit Conversion</div>
+      <div class="conv-grid">
+        <div class="conv-row">
+          <span class="conv-name">वर्ग मीटर</span>
+          <span class="conv-val" id="c-sqm">0</span>
+        </div>
+        <div class="conv-row">
+          <span class="conv-name">बीघा (UP/Bihar)</span>
+          <span class="conv-val" id="c-bigha">0</span>
+        </div>
+        <div class="conv-row">
+          <span class="conv-name">Acre</span>
+          <span class="conv-val" id="c-acre">0</span>
+        </div>
+        <div class="conv-row">
+          <span class="conv-name">Hectare</span>
+          <span class="conv-val" id="c-hectare">0</span>
+        </div>
+        <div class="conv-row">
+          <span class="conv-name">वर्ग फुट</span>
+          <span class="conv-val" id="c-sqft">0</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="sidebar-section">
+      <div class="section-label">⚡ Actions</div>
+      <div class="action-row" style="margin-bottom:8px">
+        <button class="btn btn-primary" onclick="openSaveModal()">💾 Save करें</button>
+        <button class="btn btn-danger" onclick="clearMap()">✕ Clear</button>
+      </div>
+      <div class="action-row">
+        <button class="btn btn-outline" onclick="undoLast()" title="Undo">↩ Undo</button>
+        <button class="btn btn-soil" onclick="locateMe()" style="flex:1">🎯 मेरी जगह</button>
+      </div>
+    </div>
+
+    <!-- Map Layers (mobile-friendly, replaces top-right control on small screens) -->
+    <div class="sidebar-section">
+      <div class="section-label">🗺️ मैप लेयर</div>
+      <div style="display:grid;gap:6px">
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="radio" name="maplayer" value="hybrid" checked onchange="setBaseLayer('hybrid')"/>
+          🛰️+🏷️ Satellite + Names
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="radio" name="maplayer" value="sat" onchange="setBaseLayer('sat')"/>
+          🛰️ Sirf Satellite
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer">
+          <input type="radio" name="maplayer" value="street" onchange="setBaseLayer('street')"/>
+          🗺️ Street Map
+        </label>
+        <label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;border-top:1px solid rgba(0,0,0,0.08);padding-top:8px;margin-top:2px">
+          <input type="checkbox" id="bhunaksha-toggle" onchange="toggleBhuNaksha(this.checked)"/>
+          📜 Bhu-Naksha (Sarkari Khet Border)
+        </label>
+      </div>
+    </div>
+
+    <!-- Bhu-Naksha Section -->
+    <div class="sidebar-section">
+      <div class="section-label">🏛️ सरकारी नक्शा</div>
+      <button class="btn btn-soil" onclick="openBhuNaksha()" style="width:100%;margin-bottom:8px;font-size:13px">
+        📜 Bhu-Naksha खोलें (MP)
+      </button>
+      <div style="font-size:11px;color:var(--muted);line-height:1.6;background:var(--wheat);padding:8px 10px;border-radius:8px">
+        ✅ सरकारी खेत की सीमा<br>
+        ✅ रजिस्टर्ड रास्ते<br>
+        ✅ खसरा नंबर<br>
+        ✅ पटवारी वाला नक्शा
+      </div>
+    </div>
+
+    <!-- Saved Fields -->
+    <div class="sidebar-section" style="flex:1">
+      <div class="section-label">📋 Saved खेत</div>
+      <div class="field-list" id="field-list">
+        <div class="empty-state">
+          <div class="empty-icon">🌱</div>
+          कोई खेत Save नहीं हुआ अभी तक
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- MAP -->
+  <div class="map-wrapper">
+    <div id="map"></div>
+    <div class="map-status" id="map-status">✏️ Map पर click करके खेत draw करें</div>
+  </div>
+
+</div>
+
+<!-- MANDI BHAV PAGE -->
+<div class="mandi-page" id="page-mandi" style="display:none">
+  <div class="mandi-container">
+
+    <!-- Filters -->
+    <div class="mandi-filters">
+      <div class="mandi-filter-row">
+        <div class="mandi-field">
+          <label>📍 राज्य (State)</label>
+          <select id="mandi-state" onchange="onStateChange()">
+            <option value="Madhya Pradesh" selected>Madhya Pradesh</option>
+          </select>
+        </div>
+        <div class="mandi-field">
+          <label>🏘️ जिला (District)</label>
+          <select id="mandi-district">
+            <option value="">सभी जिले</option>
+          </select>
+        </div>
+        <div class="mandi-field">
+          <label>🌾 फसल (Crop)</label>
+          <select id="mandi-commodity">
+            <option value="">सभी फसलें</option>
+          </select>
+        </div>
+        <button class="btn btn-primary mandi-search-btn" onclick="fetchMandiData()">🔍 भाव देखें</button>
+      </div>
+    </div>
+
+    <!-- Status -->
+    <div id="mandi-status" class="mandi-status">
+      👋 ऊपर से फसल/जिला चुनें और "भाव देखें" दबाएं
+    </div>
+
+    <!-- Results -->
+    <div id="mandi-results" class="mandi-results"></div>
+
+  </div>
+</div>
+
+<!-- TOAST -->
+<div class="toast" id="toast"></div>
+
+<!-- SAVE MODAL -->
+<div class="modal-overlay" id="modal">
+  <div class="modal">
+    <h3>💾 खेत Save करें</h3>
+    <input type="text" id="field-name-input" placeholder="खेत का नाम लिखें (जैसे: घर वाला खेत)" maxlength="40"/>
+    <div class="modal-btns">
+      <button class="btn btn-primary" onclick="saveField()">Save करें</button>
+      <button class="btn btn-danger" onclick="closeModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!-- BHU-NAKSHA MODAL -->
+<div class="modal-overlay" id="bhu-modal" onclick="closeBhuModal(event)">
+  <div style="
+    background:white;
+    border-radius:20px;
+    width:90vw;
+    max-width:900px;
+    height:85vh;
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+    box-shadow:0 20px 60px rgba(0,0,0,0.3);
+  ">
+    <!-- Header -->
+    <div style="background:linear-gradient(135deg,#1a4a2e,#2d7a4f);color:white;padding:16px 20px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0">
+      <div>
+        <div style="font-family:'Baloo 2',sans-serif;font-weight:800;font-size:18px">📜 Bhu-Naksha MP</div>
+        <div style="font-size:12px;opacity:0.75">मध्य प्रदेश सरकार — सरकारी खेत की सीमा</div>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center">
+        <a href="https://bhunaksha.mp.gov.in" target="_blank" style="background:rgba(255,255,255,0.2);color:white;padding:7px 14px;border-radius:20px;text-decoration:none;font-size:12px;font-weight:700">🔗 नई Tab में खोलें</a>
+        <button onclick="closeBhuNaksha()" style="background:rgba(255,255,255,0.15);border:none;color:white;width:34px;height:34px;border-radius:50%;cursor:pointer;font-size:18px;display:flex;align-items:center;justify-content:center">✕</button>
+      </div>
+    </div>
+
+    <!-- Steps bar -->
+    <div style="background:#f5e6c8;padding:10px 20px;display:flex;gap:20px;align-items:center;font-size:12px;color:#6b4628;flex-shrink:0;flex-wrap:wrap">
+      <span>👆 <b>Steps:</b></span>
+      <span>1️⃣ District chunein</span>
+      <span>→ 2️⃣ Tehsil chunein</span>
+      <span>→ 3️⃣ RI/Halka chunein</span>
+      <span>→ 4️⃣ Village chunein</span>
+      <span>→ <b style="color:#1a4a2e">✅ Naksha aa jayega!</b></span>
+    </div>
+
+    <!-- Portal Links -->
+    <div style="flex:1;overflow-y:auto;padding:24px;background:#f8faf8">
+
+      <!-- Status notice -->
+      <div style="background:#fff3cd;border:1px solid #ffc107;border-radius:12px;padding:14px 16px;margin-bottom:20px;font-size:13px;color:#856404">
+        ⚠️ <b>bhunaksha.mp.gov.in</b> kabhi kabhi down rehta hai — neeche saare alternatives diye hain!
+      </div>
+
+      <!-- Steps -->
+      <div style="background:white;border-radius:14px;padding:18px;margin-bottom:16px;box-shadow:0 2px 12px rgba(0,0,0,0.07)">
+        <div style="font-weight:800;color:#1a4a2e;margin-bottom:12px;font-size:15px">📋 Steps (Kisi bhi link pe)</div>
+        <div style="display:grid;gap:8px">
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#444">
+            <span style="background:#1a4a2e;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">1</span>
+            <span><b>District</b> chunein — jaise Sehore, Bhopal, Indore</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#444">
+            <span style="background:#1a4a2e;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">2</span>
+            <span><b>Tehsil</b> chunein</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#444">
+            <span style="background:#1a4a2e;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">3</span>
+            <span><b>RI / Halka</b> chunein</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:10px;font-size:13px;color:#444">
+            <span style="background:#1a4a2e;color:white;border-radius:50%;width:24px;height:24px;display:flex;align-items:center;justify-content:center;font-weight:700;flex-shrink:0">4</span>
+            <span><b>Village (Gram)</b> chunein → ✅ Naksha aa jayega!</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Links -->
+      <div style="font-weight:800;color:#1a4a2e;margin-bottom:12px;font-size:14px">🔗 Saare Portal Links — Ek Try Karo:</div>
+      <div style="display:grid;gap:10px">
+
+        <a href="https://mpbhuabhilekh.nic.in/bhunaksha/" target="_blank"
+          style="display:flex;align-items:center;justify-content:space-between;background:white;border:2px solid #2d7a4f;border-radius:12px;padding:14px 18px;text-decoration:none;color:#1a4a2e;box-shadow:0 2px 8px rgba(0,0,0,0.06);transition:all 0.2s">
+          <div>
+            <div style="font-weight:800;font-size:14px">🏛️ mpbhuabhilekh.nic.in</div>
+            <div style="font-size:12px;color:#666;margin-top:2px">NIC hosted — sabse reliable ✅</div>
+          </div>
+          <span style="background:#2d7a4f;color:white;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700">खोलें →</span>
+        </a>
+
+        <a href="https://bhunaksha.mp.gov.in/bhunaksha/" target="_blank"
+          style="display:flex;align-items:center;justify-content:space-between;background:white;border:2px solid #8b5e3c;border-radius:12px;padding:14px 18px;text-decoration:none;color:#1a4a2e;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+          <div>
+            <div style="font-weight:800;font-size:14px">📜 bhunaksha.mp.gov.in</div>
+            <div style="font-size:12px;color:#666;margin-top:2px">Official portal — kabhi kabhi down</div>
+          </div>
+          <span style="background:#8b5e3c;color:white;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700">खोलें →</span>
+        </a>
+
+        <a href="https://landrecords.mp.gov.in" target="_blank"
+          style="display:flex;align-items:center;justify-content:space-between;background:white;border:2px solid #555;border-radius:12px;padding:14px 18px;text-decoration:none;color:#1a4a2e;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+          <div>
+            <div style="font-weight:800;font-size:14px">📋 landrecords.mp.gov.in</div>
+            <div style="font-size:12px;color:#666;margin-top:2px">Bhulekh + Khasra + Naksha sab</div>
+          </div>
+          <span style="background:#555;color:white;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700">खोलें →</span>
+        </a>
+
+        <a href="https://mpbhulekh.gov.in/viewBhuNaksha.do" target="_blank"
+          style="display:flex;align-items:center;justify-content:space-between;background:white;border:2px solid #555;border-radius:12px;padding:14px 18px;text-decoration:none;color:#1a4a2e;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+          <div>
+            <div style="font-weight:800;font-size:14px">🗺️ mpbhulekh.gov.in</div>
+            <div style="font-size:12px;color:#666;margin-top:2px">MP Bhulekh — Bhu-Naksha section</div>
+          </div>
+          <span style="background:#555;color:white;padding:6px 14px;border-radius:20px;font-size:12px;font-weight:700">खोलें →</span>
+        </a>
+
+      </div>
+
+      <!-- Tip -->
+      <div style="background:#e8f5e9;border-radius:10px;padding:12px 16px;margin-top:16px;font-size:12px;color:#2d7a4f;line-height:1.7">
+        💡 <b>Tip:</b> Agar koi link nahi chala toh <b>subah 8-10 baje</b> try karo — government servers us time best kaam karte hain! Raat ko ya peak hours mein slow hote hain.
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── STATE ──────────────────────────────────────────────────────────────────
+let map, currentTool = 'draw';
+let drawPoints = [];
+let polygonLayer = null;
+let markersLayer = [];
+let currentAreaSqm = 0;
+let activeUnit = 'sqm';
+let savedFields = JSON.parse(localStorage.getItem('khetnaap_fields') || '[]');
+
+// ── LOCATION SEARCH ───────────────────────────────────────────────────────
+async function searchLocation() {
+  const query = document.getElementById('location-search').value.trim();
+  if (!query) return;
+  showToast('🔍 खोज रहे हैं...');
+  try {
+    const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=1&countrycodes=in`);
+    const data = await res.json();
+    if (data.length === 0) { showToast('❌ जगह नहीं मिली, दूसरा नाम try करें'); return; }
+    const { lat, lon, display_name } = data[0];
+    map.setView([parseFloat(lat), parseFloat(lon)], 17);
+    showToast('✅ ' + display_name.split(',')[0] + ' मिला!');
+  } catch(e) {
+    showToast('❌ Search fail हुई, internet check करें');
+  }
+}
+
+// ── MAP INIT ──────────────────────────────────────────────────────────────────────────────────────────
+function initMap() {
+  map = L.map('map', { zoomControl: true }).setView([23.2599, 77.4126], 7);
+
+  // Google Hybrid - Satellite + Names (sabse best!)
+  const googleHybrid = L.tileLayer(
+    'https://mt1.google.com/vt/lyrs=y&x={x}&y={y}&z={z}',
+    { attribution: 'Google Maps', maxZoom: 22 }
+  );
+
+  // Google Satellite only
+  const googleSat = L.tileLayer(
+    'https://mt1.google.com/vt/lyrs=s&x={x}&y={y}&z={z}',
+    { attribution: 'Google Satellite', maxZoom: 22 }
+  );
+
+  // OpenStreetMap
+  const streets = L.tileLayer(
+    'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    { attribution: '© OpenStreetMap', maxZoom: 19 }
+  );
+
+  // Default: Google Hybrid (Satellite + Names)
+  googleHybrid.addTo(map);
+
+  // Overlays - Bhu-Naksha
+  // MP Bhu-Naksha WMS (official government cadastral data)
+  const mpBhuNaksha = L.tileLayer.wms(
+    'https://bhunaksha.mp.gov.in/bhunaksha/wms?',
+    {
+      layers: 'mp_plot',
+      format: 'image/png',
+      transparent: true,
+      opacity: 0.75,
+      attribution: 'MP Bhu-Naksha (Govt. of MP)',
+      maxZoom: 22,
+      version: '1.1.1'
+    }
+  );
+
+  // Store globally for sidebar-based switching
+  baseLayers = { hybrid: googleHybrid, sat: googleSat, street: streets };
+  bhuNakshaLayer = mpBhuNaksha;
+
+  map.on('click', onMapClick);
+  renderSavedFields();
+}
+
+// ── SIDEBAR LAYER SWITCHER (mobile-friendly, replaces Leaflet's box) ───────
+let baseLayers = {};
+let bhuNakshaLayer = null;
+let currentBase = 'hybrid';
+
+function setBaseLayer(key) {
+  if (!map || !baseLayers[key]) return;
+  Object.values(baseLayers).forEach(l => map.removeLayer(l));
+  baseLayers[key].addTo(map);
+  currentBase = key;
+  // keep bhu-naksha on top if it was checked
+  const chk = document.getElementById('bhunaksha-toggle');
+  if (chk && chk.checked && bhuNakshaLayer) bhuNakshaLayer.addTo(map);
+}
+
+function toggleBhuNaksha(checked) {
+  if (!bhuNakshaLayer) return;
+  if (checked) {
+    bhuNakshaLayer.addTo(map);
+    showToast('📜 Bhu-Naksha layer ON — zoom in karein');
+  } else {
+    map.removeLayer(bhuNakshaLayer);
+  }
+}
+
+// ── MAP CLICK ──────────────────────────────────────────────────────────────
+function onMapClick(e) {
+  if (currentTool !== 'draw') return;
+  const { lat, lng } = e.latlng;
+
+  // Check if clicking near first point to close polygon
+  if (drawPoints.length >= 3) {
+    const first = drawPoints[0];
+    const dist = Math.sqrt(Math.pow(lat - first[0], 2) + Math.pow(lng - first[1], 2));
+    if (dist < 0.0002) {
+      closePolygon();
+      return;
+    }
+  }
+
+  drawPoints.push([lat, lng]);
+  addMarker(lat, lng, drawPoints.length);
+  updatePolygonPreview();
+  updateStatus();
+}
+
+function addMarker(lat, lng, num) {
+  const icon = L.divIcon({
+    html: `<div style="
+      background: #ffffff;
+      border: 3px solid #2d7a4f;
+      border-radius: 50%;
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 800; color: #1a4a2e;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+      cursor: pointer;
+    ">${num}</div>`,
+    className: '',
+    iconSize: [26, 26],
+    iconAnchor: [13, 13]
+  });
+
+  const marker = L.marker([lat, lng], { icon }).addTo(map);
+  markersLayer.push(marker);
+}
+
+function updatePolygonPreview() {
+  if (polygonLayer) map.removeLayer(polygonLayer);
+  if (drawPoints.length < 2) return;
+
+  const pts = drawPoints.length >= 3
+    ? [...drawPoints, drawPoints[0]]
+    : drawPoints;
+
+  polygonLayer = L.polygon(drawPoints, {
+    color: '#2d7a4f',
+    weight: 2.5,
+    fillColor: '#4caf78',
+    fillOpacity: drawPoints.length >= 3 ? 0.25 : 0,
+    dashArray: '6,6'
+  }).addTo(map);
+
+  if (drawPoints.length >= 3) calculateArea();
+}
+
+function closePolygon() {
+  if (polygonLayer) map.removeLayer(polygonLayer);
+
+  polygonLayer = L.polygon(drawPoints, {
+    color: '#1a4a2e',
+    weight: 3,
+    fillColor: '#4caf78',
+    fillOpacity: 0.35
+  }).addTo(map);
+
+  calculateArea();
+  setStatus('✅ खेत बंद हो गया! Area calculate हुआ।', false);
+  showToast('✅ खेत successfully draw हुआ!');
+}
+
+function calculateArea() {
+  if (drawPoints.length < 3) return;
+
+  const coords = [...drawPoints.map(p => [p[1], p[0]]), [drawPoints[0][1], drawPoints[0][0]]];
+  const poly = turf.polygon([coords]);
+  currentAreaSqm = turf.area(poly);
+  updateAreaDisplay();
+}
+
+// ── AREA DISPLAY ───────────────────────────────────────────────────────────
+const UNITS = {
+  sqm:     { label: 'वर्ग मीटर',  factor: 1 },
+  bigha:   { label: 'बीघा',       factor: 1/2529.3 },  // 1 bigha UP = 2529.3 sqm
+  acre:    { label: 'Acre',       factor: 0.000247105 },
+  hectare: { label: 'Hectare',    factor: 0.0001 },
+  sqft:    { label: 'वर्ग फुट',   factor: 10.7639 },
+};
+
+function updateAreaDisplay() {
+  const sqm = currentAreaSqm;
+  const val = sqm * UNITS[activeUnit].factor;
+  document.getElementById('area-main').textContent = formatNum(val);
+  document.getElementById('area-unit').textContent = UNITS[activeUnit].label;
+
+  document.getElementById('c-sqm').textContent     = formatNum(sqm);
+  document.getElementById('c-bigha').textContent   = formatNum(sqm * UNITS.bigha.factor);
+  document.getElementById('c-acre').textContent    = formatNum(sqm * UNITS.acre.factor);
+  document.getElementById('c-hectare').textContent = formatNum(sqm * UNITS.hectare.factor);
+  document.getElementById('c-sqft').textContent    = formatNum(sqm * UNITS.sqft.factor);
+}
+
+function formatNum(n) {
+  if (n === 0) return '0';
+  if (n >= 1000) return n.toLocaleString('en-IN', { maximumFractionDigits: 2 });
+  return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+}
+
+function switchUnit(unit) {
+  activeUnit = unit;
+  document.querySelectorAll('.unit-tab').forEach(t => t.classList.remove('active'));
+  event.target.classList.add('active');
+  updateAreaDisplay();
+}
+
+// ── TOOLS ──────────────────────────────────────────────────────────────────
+function setTool(tool) {
+  currentTool = tool;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('btn-' + tool)?.classList.add('active');
+
+  const msgs = {
+    draw:   '✏️ Draw Mode: Map पर click करके खेत की boundary draw करें।',
+    move:   '🖐️ Move Mode: Map को drag करके navigate करें।',
+    delete: '🗑️ Delete Mode: किसी भी point को click करके हटाएं।'
+  };
+  document.getElementById('instructions').innerHTML = msgs[tool] || '';
+}
+
+function useGPS() {
+  showToast('📍 GPS location ले रहे हैं...');
+  if (!navigator.geolocation) { showToast('❌ GPS support नहीं है'); return; }
+  navigator.geolocation.getCurrentPosition(pos => {
+    const { latitude: lat, longitude: lng } = pos.coords;
+    map.setView([lat, lng], 18);
+    if (currentTool === 'draw') {
+      drawPoints.push([lat, lng]);
+      addMarker(lat, lng, drawPoints.length);
+      updatePolygonPreview();
+      showToast('✅ GPS point add हुआ!');
+    }
+  }, () => showToast('❌ GPS access denied'));
+}
+
+function locateMe() {
+  if (!navigator.geolocation) return;
+  navigator.geolocation.getCurrentPosition(pos => {
+    map.setView([pos.coords.latitude, pos.coords.longitude], 17);
+  }, () => {});
+}
+
+function undoLast() {
+  if (drawPoints.length === 0) return;
+  drawPoints.pop();
+  const lastMarker = markersLayer.pop();
+  if (lastMarker) map.removeLayer(lastMarker);
+  updatePolygonPreview();
+  if (drawPoints.length < 3) { currentAreaSqm = 0; updateAreaDisplay(); }
+  showToast('↩ Last point हटाया');
+}
+
+function clearMap() {
+  drawPoints = [];
+  markersLayer.forEach(m => map.removeLayer(m));
+  markersLayer = [];
+  if (polygonLayer) { map.removeLayer(polygonLayer); polygonLayer = null; }
+  currentAreaSqm = 0;
+  updateAreaDisplay();
+  setStatus('✏️ Map पर click करके खेत draw करें');
+  showToast('🗑️ Map clear हुआ');
+}
+
+// ── STATUS ────────────────────────────────────────────────────────────────
+function updateStatus() {
+  const n = drawPoints.length;
+  if (n === 0) return setStatus('✏️ Map पर click करके खेत draw करें');
+  if (n < 3) return setStatus(`📍 ${n} point added — कम से कम 3 चाहिए`);
+  setStatus(`📍 ${n} points — पहले point पर click करके बंद करें`);
+}
+
+function setStatus(msg, show = true) {
+  const el = document.getElementById('map-status');
+  el.textContent = msg;
+  el.classList.toggle('hidden', !show);
+}
+
+// ── SAVE / LOAD ────────────────────────────────────────────────────────────
+function openSaveModal() {
+  if (drawPoints.length < 3 || currentAreaSqm === 0) {
+    showToast('⚠️ पहले खेत draw करें'); return;
+  }
+  document.getElementById('modal').classList.add('open');
+  setTimeout(() => document.getElementById('field-name-input').focus(), 200);
+}
+
+function closeModal() { document.getElementById('modal').classList.remove('open'); }
+
+document.getElementById('field-name-input').addEventListener('keydown', e => {
+  if (e.key === 'Enter') saveField();
+});
+
+function saveField() {
+  const name = document.getElementById('field-name-input').value.trim() || 'मेरा खेत';
+  const field = {
+    id: Date.now(),
+    name,
+    points: [...drawPoints],
+    areaSqm: currentAreaSqm,
+    date: new Date().toLocaleDateString('hi-IN')
+  };
+  savedFields.unshift(field);
+  localStorage.setItem('khetnaap_fields', JSON.stringify(savedFields));
+  renderSavedFields();
+  closeModal();
+  document.getElementById('field-name-input').value = '';
+  showToast(`✅ "${name}" save हो गया!`);
+}
+
+function renderSavedFields() {
+  const list = document.getElementById('field-list');
+  if (savedFields.length === 0) {
+    list.innerHTML = `<div class="empty-state"><div class="empty-icon">🌱</div>कोई खेत Save नहीं हुआ अभी तक</div>`;
+    return;
+  }
+
+  list.innerHTML = savedFields.map(f => `
+    <div class="field-card" onclick="loadField(${f.id})">
+      <div class="field-info">
+        <div class="field-name">🌾 ${f.name}</div>
+        <div class="field-area">${formatNum(f.areaSqm)} sq.m • ${f.date}</div>
+      </div>
+      <button class="field-del" onclick="event.stopPropagation(); deleteField(${f.id})">✕</button>
+    </div>
+  `).join('');
+}
+
+function loadField(id) {
+  const field = savedFields.find(f => f.id === id);
+  if (!field) return;
+  clearMap();
+  drawPoints = [...field.points];
+  drawPoints.forEach((pt, i) => addMarker(pt[0], pt[1], i + 1));
+  closePolygon();
+  if (field.points.length > 0) map.fitBounds(field.points);
+  showToast(`📍 "${field.name}" load हुआ`);
+}
+
+function deleteField(id) {
+  savedFields = savedFields.filter(f => f.id !== id);
+  localStorage.setItem('khetnaap_fields', JSON.stringify(savedFields));
+  renderSavedFields();
+  showToast('🗑️ खेत delete हुआ');
+}
+
+// ── TOAST ──────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ── INIT ───────────────────────────────────────────────────────────────────
+// ── BHU-NAKSHA MODAL ──────────────────────────────────────────────────────
+function openBhuNaksha() {
+  document.getElementById('bhu-modal').classList.add('open');
+  // Check if iframe loaded, else show fallback
+  const iframe = document.getElementById('bhu-iframe');
+  const fallback = document.getElementById('bhu-fallback');
+  iframe.onerror = () => { iframe.style.display='none'; fallback.style.display='flex'; };
+  setTimeout(() => {
+    try {
+      // If iframe blocked by X-Frame-Options, it won't throw but will be blank
+      // We show fallback after 4 seconds if iframe src didn't load
+    } catch(e) {
+      iframe.style.display = 'none';
+      fallback.style.display = 'flex';
+    }
+  }, 4000);
+}
+
+function closeBhuNaksha() {
+  document.getElementById('bhu-modal').classList.remove('open');
+}
+
+function closeBhuModal(e) {
+  if (e.target === document.getElementById('bhu-modal')) closeBhuNaksha();
+}
+
+// ── PAGE SWITCHING ────────────────────────────────────────────────────────
+function switchPage(page) {
+  document.getElementById('page-khet').style.display = page === 'khet' ? 'grid' : 'none';
+  document.getElementById('page-mandi').style.display = page === 'mandi' ? 'block' : 'none';
+  document.getElementById('khet-search-box').style.display = page === 'khet' ? 'flex' : 'none';
+  document.getElementById('nav-khet').classList.toggle('active', page === 'khet');
+  document.getElementById('nav-mandi').classList.toggle('active', page === 'mandi');
+
+  if (page === 'mandi' && !mandiInited) {
+    mandiInited = true;
+    initMandiFilters();
+  }
+  // Fix leaflet map sizing glitch when coming back to khet page
+  if (page === 'khet' && map) setTimeout(() => map.invalidateSize(), 100);
+}
+
+// ── MANDI BHAV ────────────────────────────────────────────────────────────
+let mandiInited = false;
+
+// data.gov.in free public API key (general access) for Agmarknet daily mandi prices
+const MANDI_API_KEY = '579b464db66ec23bdd000001cdd3946e44ce4aad7209ff7b23ac571b';
+const MANDI_RESOURCE = '9ef84268-d588-465a-a308-a864a43d0070';
+
+const MP_DISTRICTS = [
+  'Bhopal','Indore','Jabalpur','Gwalior','Ujjain','Sagar','Sehore','Vidisha','Hoshangabad',
+  'Dewas','Ratlam','Mandsaur','Neemuch','Khargone','Dhar','Betul','Chhindwara','Damoh',
+  'Satna','Rewa','Sidhi','Shahdol','Balaghat','Seoni','Narsinghpur','Raisen','Shivpuri',
+  'Guna','Ashoknagar','Datia','Bhind','Morena','Tikamgarh','Chhatarpur','Panna','Khandwa',
+  'Burhanpur','Harda','Rajgarh','Shajapur','Agar Malwa','Barwani','Jhabua','Alirajpur',
+  'Singrauli','Anuppur','Umaria','Katni','Mandla','Dindori','Sheopur'
+];
+
+const COMMON_CROPS = [
+  'Wheat','Soyabean','Soybean','Gram','Maize','Paddy(Dhan)','Mustard','Onion','Potato',
+  'Tomato','Garlic','Chana','Arhar (Tur/Red Gram)(Whole)','Masoor','Moong','Urad',
+  'Cotton','Sugarcane','Groundnut','Jowar(Sorghum)','Bajra(Pearl Millet/Cumbu)'
+];
+
+function initMandiFilters() {
+  const distSel = document.getElementById('mandi-district');
+  MP_DISTRICTS.forEach(d => {
+    const opt = document.createElement('option');
+    opt.value = d; opt.textContent = d;
+    distSel.appendChild(opt);
+  });
+
+  const cropSel = document.getElementById('mandi-commodity');
+  COMMON_CROPS.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c; opt.textContent = c;
+    cropSel.appendChild(opt);
+  });
+}
+
+function onStateChange() { /* MP only for now, placeholder for future states */ }
+
+async function fetchMandiData() {
+  const state = document.getElementById('mandi-state').value;
+  const district = document.getElementById('mandi-district').value;
+  const commodity = document.getElementById('mandi-commodity').value;
+
+  const statusEl = document.getElementById('mandi-status');
+  const resultsEl = document.getElementById('mandi-results');
+  resultsEl.innerHTML = '';
+  statusEl.style.display = 'block';
+  statusEl.className = 'mandi-status loading';
+  statusEl.textContent = '⏳ भाव लोड हो रहे हैं...';
+
+  let url = `https://api.data.gov.in/resource/${MANDI_RESOURCE}?api-key=${MANDI_API_KEY}&format=json&limit=100`;
+  url += `&filters[state]=${encodeURIComponent(state)}`;
+  if (district) url += `&filters[district]=${encodeURIComponent(district)}`;
+  if (commodity) url += `&filters[commodity]=${encodeURIComponent(commodity)}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('API error');
+    const data = await res.json();
+    const records = data.records || [];
+
+    if (records.length === 0) {
+      statusEl.className = 'mandi-status error';
+      statusEl.textContent = '😕 इस फ़िल्टर के लिए डेटा नहीं मिला। दूसरी फसल/जिला try करें।';
+      return;
+    }
+
+    statusEl.style.display = 'none';
+    renderMandiResults(records);
+  } catch (e) {
+    statusEl.className = 'mandi-status error';
+    statusEl.innerHTML = '❌ डेटा लोड नहीं हो पाया।<br><span style="font-size:12px">Government server धीमा हो सकता है, थोड़ी देर बाद try करें।</span>';
+  }
+}
+
+function renderMandiResults(records) {
+  const resultsEl = document.getElementById('mandi-results');
+
+  let html = `
+    <div class="mandi-card-head">
+      <div>फसल / मंडी</div>
+      <div>Min भाव</div>
+      <div>Max भाव</div>
+      <div>Modal भाव</div>
+      <div>दिनांक</div>
+    </div>
+  `;
+
+  records.forEach(r => {
+    html += `
+      <div class="mandi-card">
+        <div>
+          <div class="mc-crop">🌾 ${r.commodity || '-'}</div>
+          <div class="mc-mandi">📍 ${r.market || '-'}, ${r.district || '-'}</div>
+        </div>
+        <div><span class="mc-label">MIN</span><span class="mc-price mc-min">₹${r.min_price || '-'}</span></div>
+        <div><span class="mc-label">MAX</span><span class="mc-price mc-max">₹${r.max_price || '-'}</span></div>
+        <div><span class="mc-label">MODAL</span><span class="mc-price mc-modal-price">₹${r.modal_price || '-'}</span></div>
+        <div style="font-size:12px;color:var(--muted)">${r.arrival_date || '-'}</div>
+      </div>
+    `;
+  });
+
+  resultsEl.innerHTML = html;
+}
+
+window.addEventListener('load', initMap);
+</script>
+</body>
+</html>
